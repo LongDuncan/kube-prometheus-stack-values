@@ -63,11 +63,6 @@
   ```yaml
   namespace: monitoring
   ```
-- NodeSelector
-  ```yaml
-  nodeSelector:
-    appkind: gitlab
-  ```
 
 5. **PrometheusSpec部分**
 - NodeSelector
