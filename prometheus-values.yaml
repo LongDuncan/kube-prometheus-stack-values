@@ -164,32 +164,20 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
-      slack_api_url: your slack webhook url
-    receivers:
-    - name: "null"
-    - name: "slack-notifications"
-      slack_configs:
-        - channel: '#alertmanager'
-          text: '{{ template "slack.brobridge.txt" . }}'
-          title: '{{ template "slack.brobridge.title" . }}'
-          send_resolved: true
     route:
-      group_by:
-      - job
-      group_interval: 5m
+      group_by: ['job']
       group_wait: 30s
-      receiver: "null"
-      repeat_interval: 5m
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'null'
       routes:
       - match:
           alertname: Watchdog
-        receiver: "null"
-      - match_re:
-          group: ^(sre)$
-        group_by: ['job', 'host']
-        receiver: "slack-notifications"
+        receiver: 'null'
+    receivers:
+    - name: 'null'
     templates:
-      - /etc/alertmanager/config/*.tmpl
+    - '/etc/alertmanager/config/*.tmpl'
 
   ## Pass the Alertmanager configuration directives through Helm's templating
   ## engine. If the Alertmanager configuration contains Alertmanager templates,
@@ -209,27 +197,7 @@ alertmanager:
   ## ref: https://prometheus.io/docs/alerting/notifications/
   ##      https://prometheus.io/docs/alerting/notification_examples/
   ##
-  templateFiles:
-    template_1.tmpl: |-
-      {{ define "cluster" }}{{ .ExternalURL | reReplaceAll ".*alertmanager\\.(.*)" "$1" }}{{ end }}
-      {{ define "__single_message_title" }}{{ range .Alerts.Firing }}{{ .Labels.alertname }} @ {{ .Annotations.identifier }}{{ end }}{{ range .Alerts.Resolved }}{{ .Labels.alertname }} @ {{ .Annotations.identifier }}{{ end }}{{ end }}
-    slack.brobridge.title.tmpl: |-
-      {{ define "slack.brobridge.title" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ if or (and (eq (len .Alerts.Firing) 1) (eq (len .Alerts.Resolved) 0)) (and (eq (len .Alerts.Firing) 0) (eq (len .Alerts.Resolved) 1)) }}{{ template "__single_message_title" . }}{{ end }}{{ end }}
-    slack.brobridge.txt.tmpl: |-
-          {{ define "slack.brobridge.txt" }}
-          {{- template "cluster" . -}}
-          {{- $root := . -}}
-          {{ range .Alerts }}
-            *Alert:* {{ .Annotations.summary }} - `{{ .Labels.severity }}`
-            *Cluster:*  'From k8s: {{ template "cluster" $root }}'
-            *Description:* {{ .Annotations.description }}
-            *Graph:* <{{ .GeneratorURL }}|:chart_with_upwards_trend:>
-            *Runbook:* <{{ .Annotations.runbook }}|:spiral_note_pad:>
-            *Details:*
-              {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
-              {{ end }}
-          {{ end }}
-          {{ end }}
+  templateFiles: {}
   #
   ## An example template:
   #   template_1.tmpl: |-
@@ -524,6 +492,7 @@ alertmanager:
 
     ## Size is the expected size of the alertmanager cluster. The controller will eventually make the size of the
     ## running cluster equal to the expected size.
+    ## ===custom-settings===
     replicas: 2
 
     ## Time duration Alertmanager shall retain data for. Default is '120h', and must match the regular expression
@@ -534,6 +503,7 @@ alertmanager:
     ## Storage is the definition of how storage will be used by the Alertmanager instances.
     ## ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/storage.md
     ##
+    ## ===custom-settings===
     storage:
       volumeClaimTemplate:
         spec:
@@ -541,8 +511,8 @@ alertmanager:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: 10Gi
-    #   selector: {}
+              storage: 50Gi
+      # selector: {}
 
 
     ## The external URL the Alertmanager instances will be available under. This is necessary to generate correct URLs. This is necessary if Alertmanager is not served from root of a DNS name. string  false
@@ -561,7 +531,9 @@ alertmanager:
     ## Define which Nodes the Pods are scheduled on.
     ## ref: https://kubernetes.io/docs/user-guide/node-selection/
     ##
-    nodeSelector: {}
+    ## ===custom-settings===
+    nodeSelector:
+      appkind: gitlab
 
     ## Define resources requests and limits for single Pods.
     ## ref: https://kubernetes.io/docs/user-guide/compute-resources/
@@ -682,6 +654,10 @@ grafana:
   enabled: true
   namespaceOverride: ""
 
+  ## ===custom-settings===
+  nodeSelector:
+    appkind: gitlab
+
   ## ForceDeployDatasources Create datasource configmap even if grafana deployment has been disabled
   ##
   forceDeployDatasources: false
@@ -697,10 +673,13 @@ grafana:
   ## Timezone for the default dashboards
   ## Other options are: browser or a specific timezone, i.e. Europe/Luxembourg
   ##
+  ## ===custom-settings===
   defaultDashboardsTimezone: Asia/Taipei
 
-  adminPassword: prom-operator
+  ## ===custom-settings===
+  adminPassword: admin
 
+  ## ===custom-settings===
   persistence:
     type: pvc
     enabled: true
@@ -903,7 +882,8 @@ kubeApiServer:
 ##
 kubelet:
   enabled: true
-  namespace: kube-system
+  ## ===custom-settings===
+  namespace: monitoring
 
   serviceMonitor:
     ## Scrape interval. If not set, the Prometheus default scrape interval is used.
@@ -1037,7 +1017,7 @@ kubelet:
 ##
 kubeControllerManager:
   enabled: true
-
+  
   ## If your kube controller manager is not deployed as a pod, specify IPs it can be found on
   ##
   endpoints: []
@@ -1048,7 +1028,8 @@ kubeControllerManager:
   ## If using kubeControllerManager.endpoints only the port and targetPort are used
   ##
   service:
-    enabled: true
+    ## ===custom-settings===
+    enabled: false
     ## If null or unset, the value is determined dynamically based on target Kubernetes version due to change
     ## of default port in Kubernetes 1.22.
     ##
@@ -1101,7 +1082,8 @@ kubeControllerManager:
 ## Component scraping coreDns. Use either this or kubeDns
 ##
 coreDns:
-  enabled: true
+  ## ===custom-settings===
+  enabled: false
   service:
     port: 9153
     targetPort: 9153
@@ -1210,7 +1192,8 @@ kubeEtcd:
   ## Etcd service. If using kubeEtcd.endpoints only the port and targetPort are used
   ##
   service:
-    enabled: true
+    ## ===custom-settings===
+    enabled: false
     port: 2379
     targetPort: 2379
     # selector:
@@ -1277,7 +1260,8 @@ kubeScheduler:
   ## If using kubeScheduler.endpoints only the port and targetPort are used
   ##
   service:
-    enabled: true
+    ## ===custom-settings===
+    enabled: false
     ## If null or unset, the value is determined dynamically based on target Kubernetes version due to change
     ## of default port in Kubernetes 1.23.
     ##
@@ -1330,7 +1314,6 @@ kubeScheduler:
 ##
 kubeProxy:
   enabled: true
-
   ## If your kube proxy is not deployed as a pod, specify IPs it can be found on
   ##
   endpoints: []
@@ -1339,7 +1322,8 @@ kubeProxy:
   # - 10.141.4.24
 
   service:
-    enabled: true
+    ## ===custom-settings===
+    enabled: false
     port: 10249
     targetPort: 10249
     # selector:
@@ -1379,8 +1363,9 @@ kubeProxy:
 
 ## Component scraping kube state metrics
 ##
+## ===custom-settings===
 kubeStateMetrics:
-  enabled: true
+  enabled: false
 
 ## Configuration for kube-state-metrics subchart
 ##
@@ -1433,8 +1418,9 @@ kube-state-metrics:
 
 ## Deploy node exporter as a daemonset to all nodes
 ##
+## ===custom-settings===
 nodeExporter:
-  enabled: true
+  enabled: false
 
 ## Configuration for prometheus-node-exporter subchart
 ##
@@ -1477,14 +1463,16 @@ prometheus-node-exporter:
       #   replacement: $1
       #   action: drop
 
+      # - action: replace
+      #     sourceLabels:
+      #     - __meta_kubernetes_pod_node_name
+      #     targetLabel: instance
+
       ## RelabelConfigs to apply to samples before scraping
       ## ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#relabelconfig
       ##
-      relabelings:
-        - action: replace
-          sourceLabels:
-          - __meta_kubernetes_pod_node_name
-          targetLabel: instance
+      ## ===custom-settings===
+      relabelings: []
       # - sourceLabels: [__meta_kubernetes_pod_node_name]
       #   separator: ;
       #   regex: ^(.*)$
@@ -1534,7 +1522,11 @@ prometheusOperator:
       ##
       priorityClassName: ""
       podAnnotations: {}
-      nodeSelector: {}
+
+      ## ===custom-settings===
+      nodeSelector:
+        appkind: gitlab
+      
       affinity: {}
       tolerations: []
 
@@ -1652,7 +1644,8 @@ prometheusOperator:
   ##
   kubeletService:
     enabled: true
-    namespace: kube-system
+    ## ===custom-settings===
+    namespace: monitoring
     ## Use '{{ template "kube-prometheus-stack.fullname" . }}-kubelet' by default
     name: ""
 
@@ -1701,7 +1694,9 @@ prometheusOperator:
   ## Define which Nodes the Pods are scheduled on.
   ## ref: https://kubernetes.io/docs/user-guide/node-selection/
   ##
-  nodeSelector: {}
+  ## ===custom-settings===
+  nodeSelector:
+    appkind: gitlab
 
   ## Tolerations for use with node taints
   ## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
@@ -2269,7 +2264,9 @@ prometheus:
     ## Define which Nodes the Pods are scheduled on.
     ## ref: https://kubernetes.io/docs/user-guide/node-selection/
     ##
-    nodeSelector: {}
+    ## ===custom-settings===
+    nodeSelector:
+      appkind: gitlab
 
     ## Secrets is a list of Secrets in the same namespace as the Prometheus object, which shall be mounted into the Prometheus Pods.
     ## The Secrets are mounted into /etc/prometheus/secrets/. Secrets changes after initial creation of a Prometheus object are not
@@ -2484,17 +2481,18 @@ prometheus:
     ## Prometheus StorageSpec for persistent data
     ## ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/storage.md
     ##
+    ## ===custom-settings===
     storageSpec:
     ## Using PersistentVolumeClaim
     ##
      volumeClaimTemplate:
-       spec:
-         storageClassName: standard
-         accessModes: ["ReadWriteOnce"]
-         resources:
-           requests:
-             storage: 10Gi
-    #    selector: {}
+      spec:
+        storageClassName: standard
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 50Gi
+    # selector: {}
 
     ## Using tmpfs volume
     ##
