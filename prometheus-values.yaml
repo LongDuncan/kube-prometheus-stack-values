@@ -168,14 +168,31 @@ alertmanager:
       group_by: ['job']
       group_wait: 30s
       group_interval: 5m
-      repeat_interval: 12h
+      repeat_interval: 10m
       receiver: 'null'
       routes:
       - match:
           alertname: Watchdog
         receiver: 'null'
+      - match_re:
+          alertGroup: ^(storage|network)$ #當alertGroup為storage或者network進行過濾率條件
+        group_by: ['job', 'host']
+        receiver: 'email'
     receivers:
     - name: 'null'
+    - name: 'email'
+      email_configs:
+      - to: 'long0709@gmail.com'
+        headers:
+            From: 江鄧肯
+            Subject: '{{ template "email.subject" . }}'
+        html: '{{ template "email.content" . }}'
+        from: 'long0709@gmail.com'
+        smarthost: 'smtp.gmail.com:587'
+        auth_username: 'long0709@gmail.com'
+        auth_identity: 'long0709@gmail.com'
+        auth_password: 'nuoqjzsnjyucdpaj'
+        send_resolved: true
     templates:
     - '/etc/alertmanager/config/*.tmpl'
 
@@ -197,7 +214,46 @@ alertmanager:
   ## ref: https://prometheus.io/docs/alerting/notifications/
   ##      https://prometheus.io/docs/alerting/notification_examples/
   ##
-  templateFiles: {}
+  ## ===custom-settings===
+  templateFiles:
+    email.subject.tmpl: |-
+      {{define "email.subject" }}
+      告警測試
+      {{ end }}
+    email.content.tmpl: |-
+      {{ define "email.content" }}
+      <table border="1">
+        <tr>
+          <td>告警狀態</td>
+          <td>告警項目</td>
+          <td>實例</td>
+          <td>告警數值</td>
+          <td>觸發時間</td>
+          <td>恢復時間</td>
+        </tr>
+        {{ range $i, $alert := .Alerts }}
+            {{ if eq $alert.Status "firing" }}
+                <tr>
+                    <td>{{ $alert.Status }}</td>
+                    <td>{{ index $alert.Labels "alertname" }}</td>
+                    <td>{{ index $alert.Labels "instance" }}</td>
+                    <td>{{ index $alert.Annotations "value" }}</td>
+                    <td>{{ ($alert.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}</td>
+                    <td>{{ 0 }}</td>
+                </tr>
+            {{ else }}
+                <tr>
+                    <td>{{ $alert.Status }}</td>
+                    <td>{{ index $alert.Labels "alertname" }}</td>
+                    <td>{{ index $alert.Labels "instance" }}</td>
+                    <td>{{ index $alert.Annotations "value" }}</td>
+                    <td>{{ ($alert.StartsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}</td>
+                    <td>{{ ($alert.EndsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}</td>
+                </tr>
+            {{ end }}
+        {{ end }}
+      </table>
+      {{ end }}
   #
   ## An example template:
   #   template_1.tmpl: |-

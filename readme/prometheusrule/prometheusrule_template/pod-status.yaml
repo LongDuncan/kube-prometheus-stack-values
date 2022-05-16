@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pod-status.rules
+  labels:
+    app: pod-status
+    release: prometheus
+  namespace: monitoring
+spec:
+  groups:
+  - name: pod-status.rules
+    rules:
+    - alert: Kubelet_Pod_Start_Duration_Seconds_Sum_Over_45_Sec
+      expr: kubelet_pod_start_duration_seconds_sum > 45
+      for: 1m
+      labels:
+        severity: critical
+        alertGroup: storage
+      annotations:
+        description: bad ingress config - nginx config test failed
+        summary: uninstall the latest ingress changes to allow config reloads to resume
+        value: "{{ humanize $value }}"
+    - alert: Kubelet_Running_Pods_Over_0
+      expr: kubelet_running_pods > 0
+      for: 1m
+      labels:
+        severity: critical
+        alertGroup: network
+      annotations:
+        description: ssl certificate(s) will expire in less then a week
+        summary: renew expiring certificates to avoid downtime
+        value: "{{ humanize $value }}"
